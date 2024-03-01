@@ -18,12 +18,12 @@ class Layer():
 
 
 class SNN():
-    def __init__(self, ):
+    def __init__(self, _in: list, _out: list):
         super().__init__()
     
-        self.l0 = Layer(1, 64)
-        self.l1 = Layer(64, 64)
-        self.l2 = Layer(64, 1)
+        self.l0 = Layer(_in[0], _out[0])
+        self.l1 = Layer(_in[1], _out[1])
+        self.l2 = Layer(_in[2], _out[2])
 
     def forward_once(self, x)
         l0_out = self.l0(x)
