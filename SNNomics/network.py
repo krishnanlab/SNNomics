@@ -10,7 +10,7 @@ class SNN(nn.Module):
     
         self.l0 = nn.Linear(self._in, 1000)
         self.l1 = nn.Linear(1000, 500)
-        self.l2 = nn.Linear(500, 1)
+        self.l2 = nn.Linear(500, 128)
 
     def forward_once(self, x):
         l0_out = F.relu(self.l0(x), inplace=True)
