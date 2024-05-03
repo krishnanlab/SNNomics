@@ -3,39 +3,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class Layer():
-    def __init__(self, _in: int, _out: int):
-        super().__init__()
-
-        self.layer = nn.Linear(_in, _out)
+class SNN(nn.Module):
+    def __init__(self, _in: int):
+        super(SNN, self).__init__()
+        self._in = _in
     
-    def forward(self, x):
-        
-        z = self.layer(x)
-        net_out = F.relu(z, inplace=True) 
+        self.l0 = nn.Linear(self._in, 1000)
+        self.l1 = nn.Linear(1000, 500)
+        self.l2 = nn.Linear(500, 1)
 
-        return out
-
-
-class SNN():
-    def __init__(self, _in: list, _out: list):
-        super().__init__()
-    
-        self.l0 = Layer(_in[0], _out[0])
-        self.l1 = Layer(_in[1], _out[1])
-        self.l2 = Layer(_in[2], _out[2])
-
-    def forward_once(self, x)
-        l0_out = self.l0(x)
-        l1_out = self.l1(l0_out)
+    def forward_once(self, x):
+        l0_out = F.relu(self.l0(x), inplace=True)
+        l1_out = F.relu(self.l1(l0_out), inplace=True)
         l2_out = self.l2(l1_out)
 
         return l2_out
 
-    def forward(self, input1, input2)
+    def forward(self, input1, input2):
         out1 = self.forward_once(input1)
         out2 = self.forward_once(input2)
         
         return out1, out2
-
-
