@@ -14,7 +14,7 @@ if __name__ == '__main__':
         required=True,
     )
     parser.add_argument(
-        '-holdout percent',
+        '-holdout_percent',
         help='percentage of dataset to be used for final test set',
         type=float,
         default=0.1,
