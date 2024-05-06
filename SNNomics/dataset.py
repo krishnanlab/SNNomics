@@ -1,3 +1,4 @@
+import gzip
 import json
 import random
 import numpy as np
@@ -90,7 +91,7 @@ class CVSplit:
             return []
 
         combinations_list = list(combinations(positives, 2))
-        combinations_subset = random.sample(combinations_list, triplet_margin) 
+        combinations_subset = random.sample(combinations_list, triplet_margin)
         for anchor, pos in combinations_subset:
             for i, neg in enumerate(negatives):
                 triplets.append((anchor, pos, neg))
@@ -137,9 +138,10 @@ class CVSplit:
     def save(self, outdir: Path):
         print(f'Saving datasets to {outdir}')
         holdout_file = outdir / 'holdout.txt'
-        folds_file = outdir / 'folds.json'
+        folds_file = outdir / 'folds.json.gz'
 
         np.savetxt(holdout_file, self.holdout, fmt='%s')  # Save holdout
-        with open(folds_file, 'w') as f:
-            json.dump(self.folds, f, indent=4)  # Save folds
-
+        json_str = json.dumps(self.folds, indent=4)  # Save folds
+        json_bytes = json_str.encode('utf-8')
+        with gzip.open(folds_file, 'w') as f:
+            f.write(json_bytes)
