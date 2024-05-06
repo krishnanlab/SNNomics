@@ -1,3 +1,4 @@
+import json
 import random
 import numpy as np
 import pandas as pd
@@ -43,7 +44,7 @@ class CVSplit:
     def __init__(self, labels: pd.DataFrame, k: int):
         self.labels = labels
         self.k = k
-        self.folds = []
+        self.folds = {}
         self.holdout = None
 
     def holdout_split(self, holdout_percent: float, seed: int):
@@ -51,9 +52,8 @@ class CVSplit:
         num_samples = len(self.labels)
         n_holdout_samples = num_samples * holdout_percent // 1
         indices = random.sample(range(num_samples), n_holdout_samples)
-        holdout_gsms = self.labels.index.to_numpy()[indices]
-        self.holdout = self.labels.loc[[holdout_gsms]]
-        self.labels = self.labels.drop(holdout_gsms)    # Remove holdout from labels
+        self.holdout = self.labels.index.to_numpy()[indices]
+        self.labels = self.labels.drop(self.holdout)    # Remove holdout from labels
 
     def generate_triplets(self):
         triplets = []
@@ -75,22 +75,27 @@ class CVSplit:
         dataset = []
         for triplet in triplets:
             anchor, positive, negative = triplet
-            dataset.append((anchor, positive, negative, 1))  # Anchor and positive are similar
-            # Randomly select a negative sample to make it dissimilar
+            dataset.append((anchor, positive, negative, 1))
             dissimilar_negative = np.random.choice(df.index[df.index != anchor])
-            dataset.append((anchor, negative, dissimilar_negative, 0))  # Anchor and negative are dissimilar
+            dataset.append((anchor, negative, dissimilar_negative, 0))
         return pd.DataFrame(dataset, columns=['Anchor', 'Positive', 'Negative', 'Label'])
 
     def k_fold_cv(self, seed):
         kf = KFold(n_splits=self.k, shuffle=True, random_state=seed)
-        for train_index, test_index in kf.split(self.labels):
+        for i, (train_index, test_index) in enumerate(kf.split(self.labels)):
             train_df, test_df = self.labels.iloc[train_index], self.labels.iloc[test_index]
             train_dataset = self.generate_dataset(train_df)
             test_dataset = self.generate_dataset(test_df)
-            self.folds.append((train_dataset, test_dataset))
+            self.folds[f"{i + 1}"] = {
+                "train": train_dataset.values.tolist(),
+                "test": test_dataset.values.tolist()
+            }
 
     def save(self, outdir: Path):
-        self.holdout.to_csv(outdir / 'holdout.csv', index=False)
-        for i, (train_data, test_data) in enumerate(self.folds):
-            train_data.to_csv(outdir / f'train_fold_{i + 1}.csv', index=False)
-            test_data.to_csv(outdir / f'test_fold_{i + 1}.csv', index=False)
+        print(f'Saving datasets to {outdir}')
+        holdout_file = outdir / 'holdout.txt'
+        folds_file = outdir / 'folds.json'
+
+        np.savetxt(holdout_file, self.holdout)  # Save holdout
+        with open(folds_file, 'w') as f:
+            json.dump(self.folds, f, indent=4)  # Save folds
