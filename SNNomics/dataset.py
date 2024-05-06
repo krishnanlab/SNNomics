@@ -1,3 +1,4 @@
+import random
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -43,15 +44,25 @@ class CVSplit:
         self.labels = labels
         self.k = k
         self.folds = []
+        self.holdout = None
+
+    def holdout_split(self, holdout_percent: float, seed: int):
+        random.seed(seed)
+        num_samples = len(self.labels)
+        n_holdout_samples = num_samples * holdout_percent // 1
+        indices = random.sample(range(num_samples), n_holdout_samples)
+        holdout_gsms = self.labels.index.to_numpy()[indices]
+        self.holdout = self.labels.loc[[holdout_gsms]]
+        self.labels = self.labels.drop(holdout_gsms)    # Remove holdout from labels
 
     def generate_triplets(self):
         triplets = []
-        for group in self.labels.columns:
-            # Selecting positive samples
-            positives = self.labels[self.labels[group] == 1].index.tolist()
-            # Selecting negative samples
-            negatives = self.labels[self.labels[group] == -1].index.tolist()
-            # Generating triplets
+        for term in self.labels.columns:
+            # Get positive samples
+            positives = self.labels[self.labels[term] == 1].index.tolist()
+            # Get negative samples
+            negatives = self.labels[self.labels[term] == -1].index.tolist()
+            # Generate triplets
             for anchor in positives:
                 for pos in positives:
                     if anchor != pos:
@@ -70,7 +81,7 @@ class CVSplit:
             dataset.append((anchor, negative, dissimilar_negative, 0))  # Anchor and negative are dissimilar
         return pd.DataFrame(dataset, columns=['Anchor', 'Positive', 'Negative', 'Label'])
 
-    def k_fold_cv(self, seed=22):
+    def k_fold_cv(self, seed):
         kf = KFold(n_splits=self.k, shuffle=True, random_state=seed)
         for train_index, test_index in kf.split(self.labels):
             train_df, test_df = self.labels.iloc[train_index], self.labels.iloc[test_index]
@@ -79,6 +90,7 @@ class CVSplit:
             self.folds.append((train_dataset, test_dataset))
 
     def save(self, outdir: Path):
+        self.holdout.to_csv(outdir / 'holdout.csv', index=False)
         for i, (train_data, test_data) in enumerate(self.folds):
             train_data.to_csv(outdir / f'train_fold_{i + 1}.csv', index=False)
             test_data.to_csv(outdir / f'test_fold_{i + 1}.csv', index=False)
