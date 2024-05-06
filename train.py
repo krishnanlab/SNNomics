@@ -1,0 +1,100 @@
+import json
+import time
+import torch
+import numpy as np
+import torch.nn as nn
+from pathlib import Path
+import torch.optim as optim
+from SNNomics.model import SNN
+from argparse import ArgumentParser
+from SNNomics.utils import check_dir
+from SNNomics.trainer import Trainer
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser()
+    parser.add_argument(
+        '-epochs',
+        help='number of epochs to run',
+        type=int,
+        default=25,
+    )
+    parser.add_argument(
+        '-folds',
+        help='Path to json file containing training folds',
+        type=str,
+        required=True,
+    )
+    parser.add_argument(
+        '-expression_mat',
+        help='Path to .npz file containing a samples x genes expression matrix',
+        type=str,
+        required=True,
+    )
+    parser.add_argument(
+        '--save',
+        help='if applied, will save the model weights',
+        action='store_true',
+    )
+    parser.add_argument(
+        '-batch_size',
+        help='size of each batch',
+        type=int,
+        default=128,
+    )
+    parser.add_argument(
+        '-lr',
+        help='learning rate',
+        type=float,
+        default=0.001,
+    )
+    parser.add_argument(
+        '-outdir',
+        help='directory to save results to',
+        type=str,
+        default='results',
+    )
+    parser.add_argument(
+        '-out_prefix',
+        help='prefix of results outfiles',
+        type=str,
+        default=None,
+    )
+    args = parser.parse_args()
+    start = time.time()
+
+    # Set paths
+    folds_file = Path(args.folds)
+    expression_file = Path(args.expression_mat)
+    outdir = Path(args.outdir)
+    check_dir(outdir)
+
+
+    # Assign training variables
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    batch_size = args.batch_size
+    epochs = args.epochs
+    save_model = args.save
+    lr = args.lr
+
+    # Load data
+    expression_data = np.load(expression_file)
+    expression = expression_data['expression']
+    samples = expression_data['gsms']
+    genes = expression_data['genes']
+    num_genes = len(genes)
+
+    with open(folds_file, 'r') as f:    # Folds
+        folds = json.load(f)
+
+    # Train model with k-fold CV
+    for k in folds:
+        model = SNN(num_genes)
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+        triplet_loss = nn.TripletMarginLoss(margin=1.0, p=2, eps=1e-7)
+        Trainer = Trainer(
+            model,
+            optimizer,
+            triplet_loss,
+        )
+        Trainer.train(epochs=epochs)
