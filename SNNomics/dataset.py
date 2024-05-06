@@ -2,6 +2,8 @@ import json
 import random
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+import multiprocessing
 from pathlib import Path
 from itertools import combinations
 from torch.utils.data import Dataset
@@ -19,10 +21,9 @@ class SiameseDataset(Dataset):
     expression_mat: np.array
         A samples x genes matrix of expression values
     """
-    def __init__(self, training_json=None, expression_mat=None):
+    def __init__(self, training_json, expression_mat):
         # used to prepare the labels and images path
-        self.train_df = training_json
-        self.train_df.columns = ["image1", "image2", "label"]
+        self.training_json = training_json
         self.expression_mat = expression_mat
 
     def __getitem__(self, index):
@@ -50,24 +51,60 @@ class CVSplit:
     def holdout_split(self, holdout_percent: float, seed: int):
         random.seed(seed)
         num_samples = len(self.labels)
-        n_holdout_samples = num_samples * holdout_percent // 1
+        n_holdout_samples = int(num_samples * holdout_percent // 1)
         indices = random.sample(range(num_samples), n_holdout_samples)
         self.holdout = self.labels.index.to_numpy()[indices]
         self.labels = self.labels.drop(self.holdout)    # Remove holdout from labels
 
+    # def generate_triplets(self):
+    #     triplets = []
+    #     for term in tqdm(self.labels.columns):
+    #         positives = self.labels[self.labels[term] == 1].index.tolist()
+    #         negatives = self.labels[self.labels[term] == -1].index
+    #
+    #         # Check for all positive or all negative
+    #         if len(positives) < 2:
+    #             print(f'Not enough positives to generate triplets for {term}.')
+    #             continue
+    #
+    #         # Generate all possible combinations of two positive samples
+    #         for anchor, pos in combinations(positives, 2):
+    #             # Generate triplets
+    #             for neg in negatives:
+    #                 triplets.append((anchor, pos, neg))
+    #
+    #     return triplets
+
+    @staticmethod
+    def generate_triplets_for_term(args):
+        term, labels = args
+        triplets = []
+        positives = labels[labels[term] == 1].index.tolist()
+        negatives = labels[labels[term] == -1].index
+
+        if len(positives) < 2:
+            print(f'Not enough positives to generate triplets for {term}.')
+            return []
+
+        for anchor, pos in combinations(positives, 2):
+            for neg in negatives:
+                triplets.append((anchor, pos, neg))
+
+        return triplets
+
     def generate_triplets(self):
         triplets = []
-        for term in self.labels.columns:
-            # Get positive samples
-            positives = self.labels[self.labels[term] == 1].index.tolist()
-            # Get negative samples
-            negatives = self.labels[self.labels[term] == -1].index.tolist()
-            # Generate triplets
-            for anchor in positives:
-                for pos in positives:
-                    if anchor != pos:
-                        for neg in negatives:
-                            triplets.append((anchor, pos, neg))
+        num_cores = multiprocessing.cpu_count()
+
+        with multiprocessing.Pool(num_cores) as pool:
+            results = list(tqdm(pool.imap(
+                self.generate_triplets_for_term,
+                [(term, self.labels) for term in self.labels.columns]
+            ), total=len(self.labels.columns), desc="Generating triplets"))
+
+        for result in results:
+            triplets.extend(result)
+
         return triplets
 
     def generate_dataset(self, df):
@@ -83,6 +120,7 @@ class CVSplit:
     def k_fold_cv(self, seed):
         kf = KFold(n_splits=self.k, shuffle=True, random_state=seed)
         for i, (train_index, test_index) in enumerate(kf.split(self.labels)):
+            print(f"Generating fold {i+1}")
             train_df, test_df = self.labels.iloc[train_index], self.labels.iloc[test_index]
             train_dataset = self.generate_dataset(train_df)
             test_dataset = self.generate_dataset(test_df)
@@ -99,3 +137,9 @@ class CVSplit:
         np.savetxt(holdout_file, self.holdout)  # Save holdout
         with open(folds_file, 'w') as f:
             json.dump(self.folds, f, indent=4)  # Save folds
+
+    def check_uniformity(self):
+        a = self.labels.to_numpy()
+        is_unique = (a[0] == a).all(0)
+
+        return
