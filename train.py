@@ -5,8 +5,11 @@ import numpy as np
 import torch.nn as nn
 from pathlib import Path
 import torch.optim as optim
-from SNNomics.model import SNN
 from argparse import ArgumentParser
+from torch.utils.data import DataLoader, Subset
+
+from SNNomics.dataset import SiameseDataset
+from SNNomics.model import SNN
 from SNNomics.utils import check_dir
 from SNNomics.trainer import Trainer
 
@@ -92,9 +95,17 @@ if __name__ == '__main__':
         model = SNN(num_genes)
         optimizer = optim.Adam(model.parameters(), lr=lr)
         triplet_loss = nn.TripletMarginLoss(margin=1.0, p=2, eps=1e-7)
-        Trainer = Trainer(
+
+
+        data = SiameseDataset(expression_mat=expression, gsms=samples, training_json=folds, fold=k)
+
+        test_dataset = Subset(train_data, )
+
+        train_loader = DataLoader()
+
+        trainer = Trainer(
             model,
             optimizer,
             triplet_loss,
         )
-        Trainer.train(epochs=epochs)
+        trainer.train(epochs=epochs)
