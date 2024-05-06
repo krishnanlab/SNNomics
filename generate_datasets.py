@@ -36,7 +36,7 @@ if __name__ == '__main__':
     labels = pd.read_csv(labels_file, index_col=0)
 
     # Generate holdout split and k-fold CV splits
-    splitter = CVSplit(labels=labels, k=3)
-    splitter.holdout_split(holdout_percent=args.holdout_percent, seed=22)    # Generate final holdout before k-fold CV
-    splitter.k_fold_cv(seed=22)
+    splitter = CVSplit(labels=labels, k=3, triplet_margin=5, seed=22)
+    splitter.holdout_split(holdout_percent=args.holdout_percent)    # Generate final holdout before k-fold CV
+    splitter.k_fold_cv()
     splitter.save(outdir)
