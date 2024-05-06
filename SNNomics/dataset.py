@@ -22,15 +22,25 @@ class SiameseDataset(Dataset):
     expression_mat: np.array
         A samples x genes matrix of expression values
     """
-    def __init__(self, training_json, expression_mat):
-        # used to prepare the labels and images path
+    def __init__(self,
+                 expression_mat: np.ndarray,
+                 gsms: np.array,
+                 training_json: json,
+                 fold: int,
+                 split: str
+        ):
         self.training_json = training_json
         self.expression_mat = expression_mat
+        self.gsms = gsms
+        self.fold = fold
+        self.split = split
 
     def __getitem__(self, index):
-        anchor_ind = self.train_dir / self.train_df.iat[index, 0]
-        pos_ind = self.train_dir / self.train_df.iat[index, 1]
-        neg_ind = self.train_dir / self.train_df.iat[index, 2]
+        samples = self.training_json[self.fold][self.split]
+
+        anchor_ind = samples[index, 0]
+        pos_ind = samples[index, 1]
+        neg_ind = samples[index, 2]
 
         anchor = self.expression_mat[anchor_ind, :]
         pos = self.expression_mat[pos_ind, :]
@@ -39,7 +49,7 @@ class SiameseDataset(Dataset):
         return anchor, pos, neg
 
     def __len__(self):
-        return len(self.train_df)
+        return len(self.training_json[self.fold][self.split])
 
 
 class CVSplit:
@@ -58,25 +68,6 @@ class CVSplit:
         indices = random.sample(range(num_samples), n_holdout_samples)
         self.holdout = self.labels.index.to_numpy()[indices].astype(str)
         self.labels = self.labels.drop(self.holdout)    # Remove holdout from labels
-
-    # def generate_triplets(self):
-    #     triplets = []
-    #     for term in tqdm(self.labels.columns):
-    #         positives = self.labels[self.labels[term] == 1].index.tolist()
-    #         negatives = self.labels[self.labels[term] == -1].index
-    #
-    #         # Check for all positive or all negative
-    #         if len(positives) < 2:
-    #             print(f'Not enough positives to generate triplets for {term}.')
-    #             continue
-    #
-    #         # Generate all possible combinations of two positive samples
-    #         for anchor, pos in combinations(positives, 2):
-    #             # Generate triplets
-    #             for neg in negatives:
-    #                 triplets.append((anchor, pos, neg))
-    #
-    #     return triplets
 
     @staticmethod
     def generate_triplets_for_term(args):
