@@ -78,8 +78,7 @@ class CVSplit:
             test_dataset = self.generate_dataset(test_df)
             self.folds.append((train_dataset, test_dataset))
 
-    def save(self, outdir: str):
-        outdir = Path(outdir)
+    def save(self, outdir: Path):
         for i, (train_data, test_data) in enumerate(self.folds):
             train_data.to_csv(outdir / f'train_fold_{i + 1}.csv', index=False)
             test_data.to_csv(outdir / f'test_fold_{i + 1}.csv', index=False)
