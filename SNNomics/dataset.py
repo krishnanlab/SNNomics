@@ -42,18 +42,20 @@ class SiameseDataset(Dataset):
 
 
 class CVSplit:
-    def __init__(self, labels: pd.DataFrame, k: int):
+    def __init__(self, labels: pd.DataFrame, k: int, triplet_margin: int, seed: int):
         self.labels = labels
         self.k = k
+        self.triplet_margin = triplet_margin
+        self.seed=seed
         self.folds = {}
         self.holdout = None
 
-    def holdout_split(self, holdout_percent: float, seed: int):
-        random.seed(seed)
+    def holdout_split(self, holdout_percent: float):
+        random.seed(self.seed)
         num_samples = len(self.labels)
         n_holdout_samples = int(num_samples * holdout_percent // 1)
         indices = random.sample(range(num_samples), n_holdout_samples)
-        self.holdout = self.labels.index.to_numpy()[indices]
+        self.holdout = self.labels.index.to_numpy()[indices].astype(str)
         self.labels = self.labels.drop(self.holdout)    # Remove holdout from labels
 
     # def generate_triplets(self):
@@ -77,7 +79,8 @@ class CVSplit:
 
     @staticmethod
     def generate_triplets_for_term(args):
-        term, labels = args
+        term, labels, triplet_margin, seed = args
+        random.seed(seed)
         triplets = []
         positives = labels[labels[term] == 1].index.tolist()
         negatives = labels[labels[term] == -1].index
@@ -86,9 +89,13 @@ class CVSplit:
             print(f'Not enough positives to generate triplets for {term}.')
             return []
 
-        for anchor, pos in combinations(positives, 2):
-            for neg in negatives:
+        combinations_list = list(combinations(positives, 2))
+        combinations_subset = random.sample(combinations_list, triplet_margin) 
+        for anchor, pos in combinations_subset:
+            for i, neg in enumerate(negatives):
                 triplets.append((anchor, pos, neg))
+                if i == 2:
+                    continue
 
         return triplets
 
@@ -99,7 +106,7 @@ class CVSplit:
         with multiprocessing.Pool(num_cores) as pool:
             results = list(tqdm(pool.imap(
                 self.generate_triplets_for_term,
-                [(term, self.labels) for term in self.labels.columns]
+                [(term, self.labels, self.triplet_margin, self.seed) for term in self.labels.columns]
             ), total=len(self.labels.columns), desc="Generating triplets"))
 
         for result in results:
@@ -112,13 +119,11 @@ class CVSplit:
         dataset = []
         for triplet in triplets:
             anchor, positive, negative = triplet
-            dataset.append((anchor, positive, negative, 1))
-            dissimilar_negative = np.random.choice(df.index[df.index != anchor])
-            dataset.append((anchor, negative, dissimilar_negative, 0))
-        return pd.DataFrame(dataset, columns=['Anchor', 'Positive', 'Negative', 'Label'])
+            dataset.append((anchor, positive, negative))
+        return pd.DataFrame(dataset, columns=['Anchor', 'Positive', 'Negative'])
 
-    def k_fold_cv(self, seed):
-        kf = KFold(n_splits=self.k, shuffle=True, random_state=seed)
+    def k_fold_cv(self):
+        kf = KFold(n_splits=self.k, shuffle=True, random_state=self.seed)
         for i, (train_index, test_index) in enumerate(kf.split(self.labels)):
             print(f"Generating fold {i+1}")
             train_df, test_df = self.labels.iloc[train_index], self.labels.iloc[test_index]
@@ -134,12 +139,7 @@ class CVSplit:
         holdout_file = outdir / 'holdout.txt'
         folds_file = outdir / 'folds.json'
 
-        np.savetxt(holdout_file, self.holdout)  # Save holdout
+        np.savetxt(holdout_file, self.holdout, fmt='%s')  # Save holdout
         with open(folds_file, 'w') as f:
             json.dump(self.folds, f, indent=4)  # Save folds
 
-    def check_uniformity(self):
-        a = self.labels.to_numpy()
-        is_unique = (a[0] == a).all(0)
-
-        return
