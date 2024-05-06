@@ -14,6 +14,12 @@ if __name__ == '__main__':
         required=True,
     )
     parser.add_argument(
+        '-triplet_margin',
+        help='Number of triplets for each term',
+        type=int,
+        default=100,
+    )
+    parser.add_argument(
         '-holdout_percent',
         help='percentage of dataset to be used for final test set',
         type=float,
@@ -36,7 +42,7 @@ if __name__ == '__main__':
     labels = pd.read_csv(labels_file, index_col=0)
 
     # Generate holdout split and k-fold CV splits
-    splitter = CVSplit(labels=labels, k=3, triplet_margin=5, seed=22)
+    splitter = CVSplit(labels=labels, k=3, triplet_margin=args.triplet_margin, seed=22)
     splitter.holdout_split(holdout_percent=args.holdout_percent)    # Generate final holdout before k-fold CV
     splitter.k_fold_cv()
     splitter.save(outdir)
