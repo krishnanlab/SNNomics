@@ -1,6 +1,5 @@
 import torch
 import torch.nn
-from tqdm import tqdm
 
 
 class Trainer:
