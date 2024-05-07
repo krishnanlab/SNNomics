@@ -106,7 +106,7 @@ class CVSplit:
 
         return triplets
 
-    def generate_dataset(self, df):
+    def generate_dataset(self):
         triplets = self.generate_triplets()
         dataset = []
         for triplet in triplets:
