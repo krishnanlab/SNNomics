@@ -6,13 +6,12 @@ import torch.nn as nn
 from pathlib import Path
 import torch.optim as optim
 from argparse import ArgumentParser
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 
 from SNNomics.dataset import SiameseDataset
 from SNNomics.model import SNN
 from SNNomics.utils import check_dir
 from SNNomics.trainer import Trainer
-
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -72,7 +71,6 @@ if __name__ == '__main__':
     outdir = Path(args.outdir)
     check_dir(outdir)
 
-
     # Assign training variables
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = args.batch_size
@@ -87,25 +85,29 @@ if __name__ == '__main__':
     genes = expression_data['genes']
     num_genes = len(genes)
 
-    with open(folds_file, 'r') as f:    # Folds
+    with open(folds_file, 'r') as f:  # Folds
         folds = json.load(f)
 
     # Train model with k-fold CV
     for k in folds:
+        # Assign training arguments
         model = SNN(num_genes)
         optimizer = optim.Adam(model.parameters(), lr=lr)
         triplet_loss = nn.TripletMarginLoss(margin=1.0, p=2, eps=1e-7)
-
-
-        data = SiameseDataset(expression_mat=expression, gsms=samples, training_json=folds, fold=k)
-
-        test_dataset = Subset(train_data, )
-
-        train_loader = DataLoader()
+        train_data = SiameseDataset(expression_mat=expression, gsms=samples, training_json=folds, fold=k, split='train')
+        test_data = SiameseDataset(expression_mat=expression, gsms=samples, training_json=folds, fold=k, split='test')
+        train_loader = DataLoader(train_data, batch_size=batch_size, num_workers=6, shuffle=True)
+        test_loader = DataLoader(test_data, batch_size=batch_size, num_workers=6, shuffle=True)
 
         trainer = Trainer(
             model,
             optimizer,
             triplet_loss,
+            train_loader,
+            test_loader,
+            device,
+            outdir,
         )
         trainer.train(epochs=epochs)
+        trainer.test()
+        trainer.save_weights(f'model_fold-{k}.pt')
