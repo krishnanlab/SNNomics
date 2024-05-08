@@ -37,10 +37,17 @@ class SiameseDataset(Dataset):
 
     def __getitem__(self, index):
         samples = self.training_json[self.fold][self.split]
+        anchor_gsm = samples[index][0]
+        pos_gsm = samples[index][1]
+        neg_gsm = samples[index][2]
 
-        anchor_ind = samples[index, 0]
-        pos_ind = samples[index, 1]
-        neg_ind = samples[index, 2]
+        anchor_ind = np.where(np.isin(self.gsms, anchor_gsm))[0]
+        pos_ind = np.where(np.isin(self.gsms, pos_gsm))[0]
+        neg_ind = np.where(np.isin(self.gsms, neg_gsm))[0]
+        
+        print(anchor_ind)
+        print(pos_ind)
+        print(neg_ind)
 
         anchor = self.expression_mat[anchor_ind, :]
         pos = self.expression_mat[pos_ind, :]
@@ -82,7 +89,11 @@ class CVSplit:
             return []
 
         combinations_list = list(combinations(positives, 2))
-        combinations_subset = random.sample(combinations_list, triplet_margin)
+        
+        if len(combinations_list) < triplet_margin:
+            combinations_subset = random.sample(combinations_list, len(combinations_list))
+        else:
+            combinations_subset = random.sample(combinations_list, triplet_margin)
         for anchor, pos in combinations_subset:
             for i, neg in enumerate(negatives):
                 triplets.append((anchor, pos, neg))
@@ -91,23 +102,23 @@ class CVSplit:
 
         return triplets
 
-    def generate_triplets(self):
+    def generate_triplets(self, df):
         triplets = []
         num_cores = multiprocessing.cpu_count()
 
         with multiprocessing.Pool(num_cores) as pool:
             results = list(tqdm(pool.imap(
                 self.generate_triplets_for_term,
-                [(term, self.labels, self.triplet_margin, self.seed) for term in self.labels.columns]
-            ), total=len(self.labels.columns), desc="Generating triplets"))
+                [(term, df, self.triplet_margin, self.seed) for term in df.columns]
+            ), total=len(df.columns), desc="Generating triplets"))
 
         for result in results:
             triplets.extend(result)
 
         return triplets
 
-    def generate_dataset(self):
-        triplets = self.generate_triplets()
+    def generate_dataset(self, df):
+        triplets = self.generate_triplets(df)
         dataset = []
         for triplet in triplets:
             anchor, positive, negative = triplet
