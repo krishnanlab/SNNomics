@@ -1,3 +1,4 @@
+import gzip
 import json
 import time
 import torch
@@ -51,6 +52,12 @@ if __name__ == '__main__':
         default=0.001,
     )
     parser.add_argument(
+        '-weight_decay',
+        help='weight_decay',
+        type=float,
+        default=0.0005,
+    )
+    parser.add_argument(
         '-outdir',
         help='directory to save results to',
         type=str,
@@ -77,22 +84,28 @@ if __name__ == '__main__':
     epochs = args.epochs
     save_model = args.save
     lr = args.lr
+    weight_decay = args.weight_decay
 
     # Load data
-    expression_data = np.load(expression_file)
+    expression_data = np.load(expression_file, allow_pickle=True)
     expression = expression_data['expression']
     samples = expression_data['gsms']
     genes = expression_data['genes']
     num_genes = len(genes)
 
-    with open(folds_file, 'r') as f:  # Folds
-        folds = json.load(f)
+    # Load folds
+    with gzip.open(folds_file, 'r') as f:        
+        folds_bytes = f.read()                     
+
+    folds_str = folds_bytes.decode('utf-8')
+    folds = json.loads(folds_str) 
 
     # Train model with k-fold CV
     for k in folds:
+        print(f"Training fold {k}")
         # Assign training arguments
         model = SNN(num_genes)
-        optimizer = optim.Adam(model.parameters(), lr=lr)
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         triplet_loss = nn.TripletMarginLoss(margin=1.0, p=2, eps=1e-7)
         train_data = SiameseDataset(expression_mat=expression, gsms=samples, training_json=folds, fold=k, split='train')
         test_data = SiameseDataset(expression_mat=expression, gsms=samples, training_json=folds, fold=k, split='test')
@@ -107,6 +120,7 @@ if __name__ == '__main__':
             test_loader,
             device,
             outdir,
+            k,
         )
         trainer.train(epochs=epochs)
         trainer.test()
