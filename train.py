@@ -14,6 +14,12 @@ from SNNomics.model import SNN
 from SNNomics.utils import check_dir
 from SNNomics.trainer import Trainer
 
+
+def siamese_collate_fn(batch):
+    anchors, positives, negatives = zip(*batch)
+    return torch.tensor(np.stack(anchors)), torch.tensor(np.stack(positives)), torch.tensor(np.stack(negatives))
+
+
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument(
@@ -104,13 +110,14 @@ if __name__ == '__main__':
     for k in folds:
         print(f"Training fold {k}")
         # Assign training arguments
-        model = SNN(num_genes)
+        model = SNN(num_genes, 'train')
+        mpdel = model.to(device)
         optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         triplet_loss = nn.TripletMarginLoss(margin=1.0, p=2, eps=1e-7)
         train_data = SiameseDataset(expression_mat=expression, gsms=samples, training_json=folds, fold=k, split='train')
         test_data = SiameseDataset(expression_mat=expression, gsms=samples, training_json=folds, fold=k, split='test')
-        train_loader = DataLoader(train_data, batch_size=batch_size, num_workers=6, shuffle=True)
-        test_loader = DataLoader(test_data, batch_size=batch_size, num_workers=6, shuffle=True)
+        train_loader = DataLoader(train_data, batch_size=batch_size, collate_fn=siamese_collate_fn, num_workers=1, shuffle=True)
+        test_loader = DataLoader(test_data, batch_size=batch_size, num_workers=1, shuffle=True)
 
         trainer = Trainer(
             model,
