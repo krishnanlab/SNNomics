@@ -23,12 +23,12 @@ class SiameseDataset(Dataset):
         A samples x genes matrix of expression values
     """
     def __init__(self,
-                 expression_mat: np.ndarray,
-                 gsms: np.array,
-                 training_json: json,
-                 fold: int,
-                 split: str
-        ):
+        expression_mat: np.ndarray,
+        gsms: np.array,
+        training_json: json,
+        fold: int,
+        split: str
+    ):
         self.training_json = training_json
         self.expression_mat = expression_mat
         self.gsms = gsms
@@ -45,18 +45,30 @@ class SiameseDataset(Dataset):
         pos_ind = np.where(np.isin(self.gsms, pos_gsm))[0]
         neg_ind = np.where(np.isin(self.gsms, neg_gsm))[0]
         
-        print(anchor_ind)
-        print(pos_ind)
-        print(neg_ind)
-
         anchor = self.expression_mat[anchor_ind, :]
         pos = self.expression_mat[pos_ind, :]
         neg = self.expression_mat[neg_ind, :]
-
-        return anchor, pos, neg
+        
+        return np.squeeze(anchor, axis=0), np.squeeze(pos, axis=0), np.squeeze(neg, axis=0)
 
     def __len__(self):
         return len(self.training_json[self.fold][self.split])
+
+
+class PredictDataset(Dataset):
+    """Loads samples from a database"""
+    def __init__(self,
+        database: np.ndarray,
+        ids: np.array,
+    ):
+        self.database = database
+        self.ids = ids
+        
+    def __getitem__(self, index):
+        return self.ids[index], self.database[index, :]    
+    
+    def __len__(self):
+        return len(self.ids)
 
 
 class CVSplit:
@@ -82,7 +94,7 @@ class CVSplit:
         random.seed(seed)
         triplets = []
         positives = labels[labels[term] == 1].index.tolist()
-        negatives = labels[labels[term] == -1].index
+        negatives = labels[labels[term] == -1].index.to_list()
 
         if len(positives) < 2:
             print(f'Not enough positives to generate triplets for {term}.')
@@ -94,12 +106,13 @@ class CVSplit:
             combinations_subset = random.sample(combinations_list, len(combinations_list))
         else:
             combinations_subset = random.sample(combinations_list, triplet_margin)
+        
+        max_negatives_per_pair = 20
         for anchor, pos in combinations_subset:
-            for i, neg in enumerate(negatives):
+            selected_negatives = random.sample(negatives, min(max_negatives_per_pair, len(negatives)))
+            for neg in selected_negatives:
                 triplets.append((anchor, pos, neg))
-                if i == 2:
-                    continue
-
+       
         return triplets
 
     def generate_triplets(self, df):
